@@ -24,7 +24,7 @@ namespace BlobStorage.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Post([FromForm(Name = "blob")] IFormFile blob, [FromHeader] string token)
+        public async Task<IActionResult> Post(IFormFile blob, [FromHeader] string token)
         {
             if (string.IsNullOrWhiteSpace(token))
                 throw new Exception("Token is missing");
