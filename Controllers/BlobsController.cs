@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using MimeTypes;
 using System.IO;
+using System.Diagnostics;
 
 namespace BlobStorage.Controllers
 {
@@ -24,7 +25,7 @@ namespace BlobStorage.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Post(IFormFile blob, [FromHeader] string token)
+        public async Task<IActionResult> Post(IFormFile blob, [FromHeader] string token, [FromHeader] string targetExtension)
         {
             if (string.IsNullOrWhiteSpace(token))
                 throw new Exception("Token is missing");
@@ -44,9 +45,34 @@ namespace BlobStorage.Controllers
 
             var fileName = $"{Guid.NewGuid():N}{extension}".ToLower();
 
+            var originalFilePath = Path.Combine(dirPath, fileName);
+
             using (var reader = blob.OpenReadStream())
-            using (var writer = System.IO.File.OpenWrite(Path.Combine(dirPath, fileName)))
+            using (var writer = System.IO.File.OpenWrite(originalFilePath))
                 await reader.CopyToAsync(writer);
+
+            if (!string.IsNullOrWhiteSpace(targetExtension))
+            {
+                var convertedFilePath = Path.ChangeExtension(originalFilePath, targetExtension);
+
+                var processStartInfo = new ProcessStartInfo
+                {
+                    FileName = "ffmpeg",
+                    Arguments = $"-i {Path.GetFileName(originalFilePath)} {Path.GetFileName(convertedFilePath)}",
+                    WorkingDirectory = dirPath,
+                    CreateNoWindow = true,
+                    UseShellExecute = false
+                };
+
+                using(var process = new Process { StartInfo = processStartInfo })
+                {
+                    process.Start();
+                    await process.WaitForExitAsync();
+                }
+
+                if (System.IO.File.Exists(convertedFilePath))
+                    fileName = Path.GetFileName(convertedFilePath);
+            }
 
 
             return Ok(new { path = $"https://{storageOptions.Host}/blobs/{fileName}" });
